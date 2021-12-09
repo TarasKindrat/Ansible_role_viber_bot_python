@@ -1,0 +1,29 @@
+---
+# handlers file for nginx
+- name: restart nginx
+  service: 
+    name: nginx 
+    state: restarted
+
+- name: restart viber_bot_app
+  service: 
+    name: viber_bot_app 
+    state: restarted
+
+- name: start viber_bot_app
+  service: 
+    name: viber_bot_app 
+    state: started
+
+- name: restart redis
+  service: 
+    name: redis
+    state: restarted
+
+- name: reload systemd_daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+# ansible.builtin.service:
+#     name: httpd
+#     state: started

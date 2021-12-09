@@ -1,0 +1,28 @@
+[Unit]
+
+Description=gunicorn_viber bot daemon
+
+After=network.target
+
+
+
+[Service]
+
+WorkingDirectory={{ viber_bot_directory }}
+
+Environment="PATH={{ viber_bot_directory }}/bin/"
+
+# 007 - user's permission mask
+ExecStart= {{ viber_bot_directory }}/bin/gunicorn --log-level=debug \
+  --log-file=- --workers 5 --preload --bind unix:{{ viber_bot_directory }}/viber_bot.sock -m 011 wsgi:app
+
+
+Restart=always
+# time to sleep before restarting a service
+RestartSec=225s
+
+
+[Install]
+
+WantedBy=multi-user.target
+

@@ -1,0 +1,20 @@
+---
+# vars file for nginx
+key_file: /etc/nginx/ssl/nginx.key
+cert_file: /etc/nginx/ssl/nginx.crt
+conf_file_directory: /etc/nginx/conf.d
+conf_file: /etc/nginx/conf.d/viber_bot.conf
+#conf_file: /etc/nginx/nginx.conf
+server_name: bot.server.com.ua
+certbot_mail_address: webmaster@server.com.ua
+viber_bot_directory: /server_viber_bot/server_viber_bot_env
+viber_bot_logs_directory: /var/log/viberbot
+viber_bot_images_directory: /data
+tmpdir: "/opt/tmpfile/python/"
+name: "Python"
+version: "3.8.0"
+bin_version: "3.8"
+redis_password: 8d481112222222222334242455439e1
+redis_conf_place: /etc/redis.conf
+temp_file: /tmp/set_redis_password.sh
+run_script: /bin/bash /tmp/set_redis_password.sh

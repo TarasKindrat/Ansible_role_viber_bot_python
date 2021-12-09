@@ -1,0 +1,244 @@
+---
+# tasks file for nginx
+    - name: install epel-release
+      yum: 
+        name: epel-release  
+
+    - name: Update 
+      yum: 
+        update_cache: yes 
+
+    - name: install nginx and httpd-tools
+      yum: 
+        name:
+        - nginx
+        - httpd-tools  
+        - net-tools
+        - wget
+        - python-pip
+        - redis
+        
+        state: latest
+
+    - name: install the 'Development tools' package group
+      yum:
+        name: "@Development tools"
+        state: present
+    
+    - name: install additional tools for Python
+      yum:
+        name:
+          - openssl-devel
+          - bzip2-devel
+          - libffi-devel
+        state: latest
+    
+    - name: pip upgrade pip
+      pip:
+        name: pip
+        extra_args: --upgrade
+
+    - name: pip install passlib
+      pip:
+        name: passlib 
+    
+    - name: install libselinux-python libsemanage-python and policycoreutils-python
+      yum:
+        name: 
+        - libselinux-python
+        - libsemanage-python
+        - policycoreutils-python
+        state: latest        
+
+    - name: create directories for viber bot
+      file:
+        path: "{{ viber_bot_directory }}"
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: '0755'
+    
+    - name: create directories for viber bot images
+      file:
+        path: "{{viber_bot_images_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: create directories for viber bot logs
+      file:
+        path: "{{ viber_bot_logs_directory }}"
+        state: directory
+        mode: '0755'
+
+    - name: ioad template for redis set password script
+      template:
+        src: set_redis_password.sh.j2
+        dest: "{{ temp_file }}"
+        owner: root
+        group: root
+        mode: '0750'
+  
+    - name: run sed- set password script
+      command: "{{ item }}"
+      with_items:
+      - "{{ run_script }}"
+      notify: restart redis 
+
+    - name: make dir
+      file:
+        path: "{{ tmpdir }}{{ version }}"
+        state: directory
+        mode: '0755'
+    
+    - name: wget src
+      get_url: 
+        url: https://www.python.org/ftp/python/{{ version }}/Python-{{ version }}.tgz 
+        dest: "{{ tmpdir }}{{ version }}"
+        owner: root
+        group: root
+        mode: '0755'
+    
+    - name: "tar"
+      command: "tar xzvf Python-{{ version }}.tgz chdir={{ tmpdir }}{{ version }}"
+      
+    - name: recursively update python directory owner
+      file:
+        path: "{{ tmpdir }}{{ version }}"
+        state: directory
+        recurse: yes
+        owner: root
+        group: root
+        mode: '0755'
+
+
+    - name: "configure"
+      command: "/bin/bash configure --enable-optimizations chdir={{ tmpdir }}{{ version }}/{{ name }}-{{ version }}"
+    
+    - name: make altinstall python3
+      command: 'make altinstall chdir={{ tmpdir }}{{ version }}/{{ name }}-{{ version }}'
+    
+    - name: install pip
+      command: 'python{{ bin_version }} -m pip install --upgrade pip'
+
+    - name: install virtualenv
+      command: 'pip{{ bin_version }} install virtualenv'
+    
+    - name: create envy
+      command: 'virtualenv -p python{{ bin_version }} "{{ viber_bot_directory }}"' 
+      
+    - name: copy bots files
+      copy:
+        src: viber_bot/
+        dest: "{{ viber_bot_directory }}"
+        owner: nginx
+        group: nginx
+        mode: '0644'
+    
+    - name: copy bots_images files
+      copy:
+        src: viber_bot/buttons_images/
+        dest: "{{ viber_bot_images_directory }}/buttons_images"
+        owner: root
+        group: root
+        mode: '0644'
+  
+    - name: install requirements
+      pip: 
+       requirements: "{{ viber_bot_directory }}/requirements.txt"
+       virtualenv: "{{ viber_bot_directory }}"
+       virtualenv_python: python{{ bin_version }}
+
+    - name: create directories for nginx bot conf
+      file:
+        path: "{{ conf_file_directory }}"
+        state: directory
+        mode: '0755'
+    - name: copy nginx config file
+      template:
+        src: nginx.conf.j2
+        dest: "{{ conf_file }}"
+        owner: root
+        group: root
+        mode: '0600'
+      # notify: restart nginx 
+       
+    - name: open https
+      firewalld:
+        service: https
+        permanent: yes
+        state: enabled
+    
+    - name: open http
+      firewalld:
+        service: http
+        permanent: yes
+        state: enabled
+    
+    - name: reload firewalld
+      command: firewall-cmd --reload       
+
+    - name: install Cerbot nginx
+      yum:
+        name: 
+        - certbot-nginx
+        state: latest
+    #Should be run on real server    
+    - name: run cerbot
+      command: certbot --nginx -d {{ server_name }} -m {{ certbot_mail_address }} --agree-tos --noninteractive --redirect
+      
+    - name: add cerbot to cron 
+      command: certbot renew --dry-run
+  
+    - name: adding nginx to startup program
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+      notify: restart nginx
+    
+    - name: allow nginx to modify files in viber bot folder for creating soket
+      sefcontext:
+        target: "{{ viber_bot_directory }}(/.*)?"
+        setype: httpd_var_run_t
+        state: present   
+    
+    - name: set httpd_can_network_connect flag on and keep it persistent across reboots
+      seboolean:
+        name: httpd_can_network_connect
+        state: yes
+        persistent: yes
+    
+    # allow Nginx
+    - name: selinux allow nginx 
+      command: semanage permissive -a httpd_t
+        
+    - name: copy systemd service file 
+      template:
+        src: viber_bot_app.service.j2
+        dest: /etc/systemd/system/viber_bot_app.service
+        owner: nginx
+        group: nginx
+        mode: '0644'
+      notify: reload systemd_daemon
+
+    - name: reload systemd_daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: adding redis to startup program
+      service:
+        name: redis
+        state: started
+        enabled: yes
+      notify: restart redis
+      
+    - name: adding viber_bot_app to startup program
+      service:
+        name: viber_bot_app
+        state: started
+        enabled: yes
+      notify: restart viber_bot_app
+    
+    

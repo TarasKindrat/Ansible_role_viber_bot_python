@@ -1,0 +1,9 @@
+---
+- name: Install Viber bot for bots on Centos 7
+  gather_facts: Yes
+  hosts: bot_host
+  become: True
+
+  roles:
+    - role: viber_bot
+    
